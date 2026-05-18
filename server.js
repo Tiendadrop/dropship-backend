@@ -435,92 +435,11 @@ app.get('/api/test', (req, res) => {
     producto.ventas += 1;
     saveProducts(productos);
     
-    fetch('https://hook.eu1.make.com/9at6ffcjumyyvf04khdq83xameudfoss', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(pedido)
-    }).catch(err => console.log('Make error: ' + err.message));
+    const mensaje = `🚀 NUEVO PEDIDO\n\n📋 ID: ${pedidoId}\n👤 Cliente: Test Usuario\n📧 Email: alvaromarsolgan@gmail.com\n\n📦 PRODUCTO:\n${producto.nombre}\n💰 TOTAL: €${producto.precioVenta}\n\n📍 Dirección: Calle Test 123, Madrid, España`;
+    
+    fetch(`https://api.telegram.org/bot8791673183:AAE30XKSjFdLZ5c-lwwqa2tcK_0dGYaSFLo/sendMessage?chat_id=-5299638230&text=${encodeURIComponent(mensaje)}`)
+        .then(r => console.log('Telegram:', r.status))
+        .catch(e => console.log('Error:', e.message));
     
     res.json({ success: true, pedidoId: pedidoId, producto: producto.nombre });
-});
-
-app.get('/api/pedidos/:id', (req, res) => {
-    const pedidos = getOrders();
-    const pedido = pedidos.find(p => p.id === req.params.id);
-    
-    if (pedido) {
-        res.json(pedido);
-    } else {
-        res.status(404).json({ error: 'Pedido no encontrado' });
-    }
-});
-
-app.get('/api/stats', (req, res) => {
-    const productos = getProducts();
-    const pedidos = getOrders();
-    
-    const ingresosTotales = pedidos
-        .filter(p => p.pago.estado === 'completado')
-        .reduce((sum, p) => sum + p.total, 0);
-    
-    const beneficiosTotales = pedidos
-        .filter(p => p.pago.estado === 'completado')
-        .reduce((sum, p) => sum + p.items.reduce((s, i) => s + i.beneficio, 0), 0);
-    
-    const pedidosCompletados = pedidos.filter(p => p.pago.estado === 'completado').length;
-    
-    res.json({
-        totalProductos: productos.length,
-        pedidosTotales: pedidos.length,
-        pedidosCompletados,
-        ingresosTotales: Math.round(ingresosTotales * 100) / 100,
-        beneficiosTotales: Math.round(beneficiosTotales * 100) / 100,
-        productosTop: productos.sort((a, b) => b.ventas - a.ventas).slice(0, 5)
-    });
-});
-
-app.get('/api/productos/recomendados', (req, res) => {
-    const productos = getProducts().filter(p => p.activo);
-    const recomendados = productos
-        .map(p => ({
-            ...p,
-            margen: Math.round(((p.precioVenta - p.precioProveedor) / p.precioProveedor) * 100),
-            potencial: p.ventas * ((p.precioVenta - p.precioProveedor) / p.precioProveedor)
-        }))
-        .sort((a, b) => b.potencial - a.potencial)
-        .slice(0, 6);
-    res.json(recomendados);
-});
-
-app.get('/api/config/proveedor', (req, res) => {
-    const config = getConfig();
-    res.json(config);
-});
-
-app.get('/api/pedidos/:id/seguimiento', async (req, res) => {
-    const pedidos = getOrders();
-    const pedido = pedidos.find(p => p.id === req.params.id);
-    
-    if (!pedido) {
-        return res.status(404).json({ error: 'Pedido no encontrado' });
-    }
-    
-    if (!pedido.proveedor.tracking) {
-        return res.status(400).json({ error: 'No hay tracking disponible' });
-    }
-    
-    const config = getConfig();
-    const trackingInfo = await checkTracking(pedido.proveedor.tracking, config);
-    
-    res.json({
-        pedidoId: pedido.id,
-        estado: pedido.estado,
-        ...trackingInfo
-    });
-});
-
-app.listen(PORT, () => {
-    console.log(`🚀 Servidor de tienda dropshipping ejecutándose en http://localhost:${PORT}`);
-    console.log(`📊 Panel de estadísticas: http://localhost:${PORT}/api/stats`);
-    console.log(`🛒 Productos: http://localhost:${PORT}/api/productos`);
 });
