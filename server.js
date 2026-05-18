@@ -342,7 +342,36 @@ app.post('/api/pedidos/:id/pagar', async (req, res) => {
                 
                 console.log('\n═══════════════════════════════════════════');
                 console.log('✅ AUTOMATIZACIÓN COMPLETADA');
+                console.log('═══════════════════════════════════════════');
+                console.log('📦 PEDIDO LISTO PARA FULFILL');
+                console.log('───────────────────────────────────────────');
+                console.log('Productos a comprar en AliExpress:');
+                pedidoActualizado.items.forEach((item, idx) => {
+                    console.log(`${idx + 1}. ${item.nombre} x${item.cantidad} - €${item.beneficio.toFixed(2)} beneficio`);
+                });
+                console.log('───────────────────────────────────────────');
+                console.log('👤 Cliente: ' + pedidoActualizado.cliente.nombre + ' ' + pedidoActualizado.cliente.apellidos);
+                console.log('📍 Dirección: ' + pedidoActualizado.cliente.direccion);
+                console.log('   ' + pedidoActualizado.cliente.ciudad + ', ' + pedidoActualizado.cliente.pais);
+                console.log('   CP: ' + pedidoActualizado.cliente.codigoPostal);
+                console.log('   📱 Tel: ' + pedidoActualizado.cliente.telefono);
                 console.log('═══════════════════════════════════════════\n');
+                
+                fetch('https://hook.eu1.make.com/9at6ffcjumyyvf04khdq83xameudfoss', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: pedidoActualizado.id,
+                        cliente: pedidoActualizado.cliente,
+                        items: pedidoActualizado.items.map(i => ({
+                            nombre: i.nombre,
+                            cantidad: i.cantidad,
+                            precio: i.precio
+                        })),
+                        total: pedidoActualizado.total,
+                        fecha: new Date().toISOString()
+                    })
+                }).catch(err => console.log('Make webhook: ' + err.message));
                 
             } catch (error) {
                 console.error('[AUTO] Error:', error);
@@ -361,6 +390,58 @@ app.post('/api/pedidos/:id/pagar', async (req, res) => {
 app.get('/api/pedidos', (req, res) => {
     const pedidos = getOrders();
     res.json(pedidos);
+});
+
+app.get('/api/test', (req, res) => {
+    const productos = getProducts();
+    const producto = productos[0];
+    
+    if (!producto) {
+        return res.json({ error: 'No hay productos' });
+    }
+    
+    const pedidoId = uuidv4();
+    const pedido = {
+        id: pedidoId,
+        fecha: new Date().toISOString(),
+        cliente: {
+            nombre: 'Test',
+            apellidos: 'Usuario',
+            email: 'alvaromarsolgan@gmail.com',
+            telefono: '+34600000000',
+            direccion: 'Calle Test 123',
+            ciudad: 'Madrid',
+            pais: 'España',
+            codigoPostal: '28001'
+        },
+        items: [{
+            productoId: producto.id,
+            nombre: producto.nombre,
+            precio: producto.precioVenta,
+            cantidad: 1,
+            beneficio: producto.precioVenta - producto.precioProveedor
+        }],
+        total: producto.precioVenta,
+        estado: 'pagado',
+        pago: { estado: 'completado', fecha: new Date().toISOString() },
+        proveedor: { estado: 'pendiente' },
+        historial: [{ fecha: new Date().toISOString(), accion: 'Test' }]
+    };
+    
+    const pedidos = getOrders();
+    pedidos.push(pedido);
+    saveOrders(pedidos);
+    
+    producto.ventas += 1;
+    saveProducts(productos);
+    
+    fetch('https://hook.eu1.make.com/9at6ffcjumyyvf04khdq83xameudfoss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pedido)
+    }).catch(err => console.log('Make error: ' + err.message));
+    
+    res.json({ success: true, pedidoId: pedidoId, producto: producto.nombre });
 });
 
 app.get('/api/pedidos/:id', (req, res) => {
